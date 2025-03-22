@@ -1,0 +1,50 @@
+name: CI-CD
+
+on:
+    push:
+        branches: ["main"]
+    workflow_dispatch:
+
+
+jobs:
+    CI:
+        runs-on: ubuntu-latest
+        steps: 
+            - name: Obtendo o Codigo
+              uses: actions/checkout@v4.2.2
+            
+            - name: Fazer login no Docker Hub
+              uses: docker/login-action@v3
+              with:
+                username: ${{ secrets.DOCKERHUB_USERNAME }}
+                password: ${{ secrets.DOCKERHUB_TOKEN }}
+            
+            - name: Build e push da imagem docker
+              uses: docker/build-push-action@v6
+              with:
+                context: ./src
+                push: true
+                file: ./src/Dockerfile
+                tags: |
+                  pedroangelovargas/cluster-k8s:v${{ github.run_number }}
+                  pedroangelovargas/cluster-k8s
+    
+    
+    CD:
+        needs: [CI]
+        runs-on: ubuntu-latest
+        steps:
+            - name: Obtendo o Codigo
+              uses: actions/checkout@v4.2.2
+            
+            - name: Criando Kubeconfig
+              uses: azure/k8s-set-context@v4
+              with: 
+                method: kubeconfig
+                kubeconfig: ${{ secrets.K8S_KUBECONFIG }}
+
+            - name: Deploy do Manifesto
+              uses: azure/k8s-deploy@v5
+              with:
+                manifests: k8s/ManifestoK8s.yml
+                images: pedroangelovargas/cluster-k8s:v${{ github.run_number }}
